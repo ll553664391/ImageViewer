@@ -1,0 +1,548 @@
+:root {
+  --bg: #101114;
+  --bg-soft: #191b20;
+  --panel: rgba(25, 27, 32, 0.86);
+  --border: #2c2f37;
+  --text: #e8eaed;
+  --text-dim: #9aa0aa;
+  --accent: #4c8bf5;
+  --accent-hover: #5f9bff;
+  --danger: #e05252;
+  --radius: 10px;
+  --stage-bg: #101114;
+  --stage-glow: radial-gradient(circle at 50% 45%, #17191e 0%, #101114 70%);
+  --hover-bg: #262a32;
+  --toast-bg: rgba(28, 31, 37, 0.96);
+  --code-bg: #0e1013;
+  font-family: "Segoe UI", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
+  color-scheme: dark;
+}
+
+/* 白色主题 */
+:root[data-theme="light"] {
+  --bg: #f4f5f7;
+  --bg-soft: #ffffff;
+  --panel: rgba(255, 255, 255, 0.92);
+  --border: #d8dbe0;
+  --text: #1c1e22;
+  --text-dim: #5f6570;
+  --accent: #2f6fd0;
+  --accent-hover: #255bb0;
+  --radius: 10px;
+  --stage-bg: #eceff3;
+  --stage-glow: radial-gradient(circle at 50% 45%, #f7f8fa 0%, #e6e9ee 70%);
+  --hover-bg: #e8eaee;
+  --toast-bg: rgba(255, 255, 255, 0.98);
+  --code-bg: #f0f1f3;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---------- 右键菜单 ---------- */
+.context-menu {
+  position: fixed;
+  min-width: 156px;
+  padding: 6px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+  z-index: 60;
+}
+
+.context-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.context-menu button:hover {
+  background: var(--hover-bg);
+}
+
+.context-menu button svg {
+  color: var(--text-dim);
+}
+
+/* ---------- 舞台 ---------- */
+#stage {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--stage-bg);
+  background-image: var(--stage-glow);
+  cursor: default;
+}
+
+#stage.pannable {
+  cursor: grab;
+}
+
+#stage.panning {
+  cursor: grabbing;
+}
+
+#photo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  image-rendering: auto;
+  -webkit-user-drag: none;
+  pointer-events: none;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55);
+}
+
+/* ---------- 空状态 ---------- */
+#empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+#empty svg {
+  color: var(--text-dim);
+  opacity: 0.55;
+  margin-bottom: 4px;
+}
+
+#empty h1 {
+  font-size: 22px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+#empty p {
+  font-size: 13px;
+}
+
+#empty .hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  opacity: 0.75;
+  margin-top: 10px;
+}
+
+.empty-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.empty-actions button,
+.primary {
+  height: 38px;
+  padding: 0 20px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.empty-actions button:hover {
+  background: var(--hover-bg);
+}
+
+.empty-actions .primary,
+.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.empty-actions .primary:hover,
+.primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* ---------- 缩略图总览 ---------- */
+#minimap {
+  position: absolute;
+  right: 18px;
+  bottom: 44px;
+  width: 176px;
+  height: 120px;
+  background: #0b0c0e;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+  z-index: 10;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#minimap img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+#miniViewport {
+  position: absolute;
+  border: 1.5px solid var(--accent);
+  background: rgba(76, 139, 245, 0.18);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.mini-label {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.75);
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+}
+
+/* ---------- 快捷键提示 ---------- */
+#shortcutHint {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--text-dim);
+  opacity: 0.8;
+  z-index: 12;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ---------- Toast ---------- */
+#toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.94);
+  padding: 12px 26px;
+  background: var(--toast-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  font-size: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 40;
+}
+
+#toast.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+#toast.warn {
+  border-color: #6a5630;
+  color: #f0c674;
+}
+
+/* ---------- 设置弹窗 ---------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  backdrop-filter: blur(3px);
+}
+
+.modal-card {
+  width: min(560px, 90vw);
+  max-height: 86vh;
+  overflow-y: auto;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.7);
+  padding: 22px 26px 26px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.modal-head h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.modal-head .close {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.modal-head .close:hover {
+  background: var(--hover-bg);
+  color: var(--text);
+}
+
+.modal-card section {
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+
+.modal-card section h3 {
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.modal-card section p {
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+.modal-card .muted {
+  color: var(--text-dim);
+  opacity: 0.8;
+  font-size: 12px;
+}
+
+.modal-card section .primary {
+  height: 34px;
+  padding: 0 14px;
+}
+
+.status-tag {
+  display: inline-block;
+  margin-left: 10px;
+  font-size: 12px;
+  color: #6cc98a;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.switch-row input {
+  display: none;
+}
+
+.switch-row .switch {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  background: #3a3f49;
+  border-radius: 999px;
+  transition: background 0.2s;
+}
+
+.switch-row .switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+}
+
+.switch-row input:checked + .switch {
+  background: var(--accent);
+}
+
+.switch-row input:checked + .switch::after {
+  transform: translateX(18px);
+}
+
+.paths code {
+  display: block;
+  padding: 8px 10px;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  word-break: break-all;
+  user-select: text;
+}
+
+/* ---------- 主题选择 ---------- */
+.theme-options {
+  display: flex;
+  gap: 12px;
+}
+
+.theme-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg-soft);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.theme-option:hover {
+  background: var(--hover-bg);
+}
+
+.theme-option.active {
+  border-color: var(--accent);
+}
+
+.theme-preview {
+  display: block;
+  width: 100%;
+  height: 44px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-preview::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 10px;
+  bottom: 10px;
+  border-radius: 3px;
+}
+
+.theme-preview.light {
+  background: #f4f5f7;
+}
+
+.theme-preview.light::after {
+  background: linear-gradient(135deg, #dfe3ea, #c9d2e0);
+}
+
+.theme-preview.dark {
+  background: #101114;
+}
+
+.theme-preview.dark::after {
+  background: linear-gradient(135deg, #2b3038, #1c1f26);
+}
+
+/* ---------- 底部进度条 ---------- */
+#progressBar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: rgba(187, 247, 208, 0.12);
+  z-index: 30;
+  overflow: visible;
+}
+
+#progressFill {
+  position: relative;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, rgba(167, 243, 208, 0.15) 0%, #86efac 42%, #d1fae5 100%);
+  box-shadow: 0 0 8px rgba(167, 243, 208, 0.7);
+  transition: width 0.22s ease;
+}
+
+#progressFill::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 28px;
+  height: 1px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, transparent, #f0fdf4);
+  box-shadow: 0 0 6px 1px rgba(220, 252, 231, 0.85);
+  pointer-events: none;
+}
+
+:root[data-theme="light"] #progressBar {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+:root[data-theme="light"] #progressFill {
+  background: linear-gradient(90deg, rgba(110, 231, 183, 0.2) 0%, #6ee7b7 42%, #ecfdf5 100%);
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.45);
+}
+
+:root[data-theme="light"] #progressFill::after {
+  background: linear-gradient(90deg, transparent, #ffffff);
+  box-shadow: 0 0 6px 1px rgba(167, 243, 208, 0.9);
+}
+
+/* 有进度条时，快捷键提示上移 */
+#progressBar:not(.hidden) ~ #shortcutHint {
+  bottom: 12px;
+}

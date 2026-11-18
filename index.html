@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>快看看图</title>
+  </head>
+  <body>
+    <div id="app">
+      <!-- 舞台 -->
+      <main id="stage">
+        <img id="photo" alt="" draggable="false" />
+
+        <!-- 空状态 -->
+        <div id="empty">
+          <svg viewBox="0 0 24 24" width="72" height="72" aria-hidden="true">
+            <rect x="2.5" y="4" width="19" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <circle cx="8.5" cy="9.5" r="2" fill="currentColor"/>
+            <path d="M4 17l4.6-4.6 3.2 3.2 3-3L20 17.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <h1>快看看图</h1>
+          <p>打开一张图片，即可浏览它所在文件夹的所有图片</p>
+          <div class="empty-actions">
+            <button class="primary" id="btnEmptyImage">打开图片</button>
+            <button id="btnEmptySettings">设置</button>
+          </div>
+          <p class="hint">双击文件夹中的图片也可用本工具查看 · 方向键 / A D 翻页 · 滚轮缩放</p>
+        </div>
+
+        <!-- 右下角缩略图 -->
+        <div id="minimap" class="hidden">
+          <img id="miniImg" alt="" draggable="false" />
+          <div id="miniViewport"></div>
+          <div class="mini-label">总览</div>
+        </div>
+      </main>
+
+      <!-- 底部进度条（与标题栏的 当前/总数 对应） -->
+      <div id="progressBar" class="hidden"><div id="progressFill"></div></div>
+
+      <!-- 快捷键提示 -->
+      <div id="shortcutHint">↑ ← A 上一张 · ↓ → D 下一张 · 滚轮缩放 · 拖动平移 · 0 适应 · S 设置 · F11 全屏 · Esc 退出</div>
+
+      <!-- 提示气泡 -->
+      <div id="toast"></div>
+
+      <!-- 右键菜单 -->
+      <div id="contextMenu" class="context-menu hidden">
+        <button data-action="settings">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1.03 1.56V21h-4v-.08A1.7 1.7 0 008.98 19.4a1.7 1.7 0 00-1.87.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 004.62 15a1.7 1.7 0 00-1.56-1.03H3v-4h.08A1.7 1.7 0 004.62 8.98a1.7 1.7 0 00-.34-1.87l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 009 4.62a1.7 1.7 0 001.03-1.56V3h4v.08A1.7 1.7 0 0015.02 4.6a1.7 1.7 0 001.87-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0019.38 9v.08A1.7 1.7 0 0020.94 10H21v4h-.08A1.7 1.7 0 0019.4 15z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          设置
+        </button>
+        <button data-action="open">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          打开图片
+        </button>
+        <button data-action="fit">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          适应窗口
+        </button>
+        <button data-action="fullscreen">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          全屏
+        </button>
+      </div>
+
+      <!-- 设置弹窗 -->
+      <div id="settingsModal" class="modal hidden">
+        <div class="modal-card">
+          <div class="modal-head">
+            <h2>设置</h2>
+            <button class="close" id="btnCloseSettings" title="关闭">×</button>
+          </div>
+
+          <section>
+            <h3>主题</h3>
+            <p>选择界面配色，默认暗色。</p>
+            <div class="theme-options">
+              <button class="theme-option" data-theme="light">
+                <span class="theme-preview light"></span>
+                <span>白色主题</span>
+              </button>
+              <button class="theme-option" data-theme="dark">
+                <span class="theme-preview dark"></span>
+                <span>暗色主题</span>
+              </button>
+            </div>
+          </section>
+
+          <section>
+            <h3>标题栏信息</h3>
+            <p>勾选后在窗口标题栏显示图片的完整绝对地址，而非仅文件名。</p>
+            <label class="switch-row">
+              <span>显示图片绝对地址</span>
+              <input type="checkbox" id="chkShowFullPath" />
+              <span class="switch"></span>
+            </label>
+          </section>
+
+          <section>
+            <h3>默认看图程序</h3>
+            <p>将本程序注册到系统“打开方式”中，随后在 Windows 设置里确认即可替换默认看图软件。<br /><span class="muted">Windows 10/11 不允许程序静默修改默认关联，需要你在弹出的系统设置中点一下确认。</span></p>
+            <button class="primary" id="btnSetDefault">注册并打开系统设置</button>
+            <span id="defaultStatus" class="status-tag"></span>
+          </section>
+
+          <section>
+            <h3>文件夹右键菜单</h3>
+            <p>在文件夹上或文件夹空白处右键，增加“使用快看看图查看图片”。</p>
+            <label class="switch-row">
+              <span>启用右键菜单</span>
+              <input type="checkbox" id="chkContextMenu" />
+              <span class="switch"></span>
+            </label>
+          </section>
+
+          <section class="paths">
+            <h3>程序位置</h3>
+            <code id="exePath"></code>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
