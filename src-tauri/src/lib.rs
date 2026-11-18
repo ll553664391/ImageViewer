@@ -197,6 +197,140 @@ fn open_folder(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// 把文本写入系统剪贴板（Windows 原生 API，不引入额外依赖）
+#[tauri::command]
+fn write_clipboard(text: String) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use std::ffi::c_void;
+        use std::os::windows::ffi::OsStrExt;
+        use std::ptr;
+
+        #[link(name = "user32")]
+        extern "system" {
+            fn OpenClipboard(h_wnd_new_owner: *mut c_void) -> i32;
+            fn CloseClipboard() -> i32;
+            fn EmptyClipboard() -> i32;
+            fn SetClipboardData(u_format: u32, h_mem: *mut c_void) -> *mut c_void;
+        }
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GlobalAlloc(u_flags: u32, dw_bytes: usize) -> *mut c_void;
+            fn GlobalLock(h_mem: *mut c_void) -> *mut c_void;
+            fn GlobalUnlock(h_mem: *mut c_void) -> i32;
+            fn GlobalFree(h_mem: *mut c_void) -> *mut c_void;
+        }
+
+        const CF_UNICODETEXT: u32 = 13;
+        const GMEM_MOVEABLE: u32 = 0x0002;
+
+        let wide: Vec<u16> = std::ffi::OsStr::new(&text)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let byte_len = wide.len() * std::mem::size_of::<u16>();
+
+        unsafe {
+            if OpenClipboard(ptr::null_mut()) == 0 {
+                return Err("无法打开系统剪贴板".into());
+            }
+            if EmptyClipboard() == 0 {
+                CloseClipboard();
+                return Err("无法清空系统剪贴板".into());
+            }
+            let h_mem = GlobalAlloc(GMEM_MOVEABLE, byte_len);
+            if h_mem.is_null() {
+                CloseClipboard();
+                return Err("分配剪贴板内存失败".into());
+            }
+            let locked = GlobalLock(h_mem);
+            if locked.is_null() {
+                GlobalFree(h_mem);
+                CloseClipboard();
+                return Err("锁定剪贴板内存失败".into());
+            }
+            ptr::copy_nonoverlapping(wide.as_ptr(), locked as *mut u16, wide.len());
+            GlobalUnlock(h_mem);
+
+            let ok = !SetClipboardData(CF_UNICODETEXT, h_mem).is_null();
+            if !ok {
+                GlobalFree(h_mem);
+            }
+            CloseClipboard();
+            if !ok {
+                return Err("写入剪贴板失败".into());
+            }
+        }
+        return Ok(());
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = text;
+        Err("当前平台不支持原生剪贴板写入".into())
+    }
+}
+
+/// 把当前图片复制到指定文件夹；同名文件自动追加 " (1)"、" (2)" …
+#[tauri::command]
+fn copy_image_to_folder(source: String, dest_folder: String) -> Result<String, String> {
+    let src = PathBuf::from(&source);
+    if !src.is_file() {
+        return Err(format!("源文件不存在：{}", source));
+    }
+    let dir = PathBuf::from(&dest_folder);
+    if !dir.is_dir() {
+        return Err(format!("目标文件夹不存在：{}", dest_folder));
+    }
+
+    let file_name = src
+        .file_name()
+        .ok_or_else(|| "无法获取源文件名".to_string())?;
+    let mut dest = dir.join(file_name);
+
+    if dest.exists() {
+        let stem = src
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("image")
+            .to_string();
+        let ext = src
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_string();
+        let mut n = 1usize;
+        loop {
+            let name = if ext.is_empty() {
+                format!("{} ({})", stem, n)
+            } else {
+                format!("{} ({}).{}", stem, n, ext)
+            };
+            let candidate = dir.join(&name);
+            if !candidate.exists() {
+                dest = candidate;
+                break;
+            }
+            n += 1;
+        }
+    }
+
+    std::fs::copy(&src, &dest).map_err(|e| format!("复制失败：{}", e))?;
+    Ok(dest.to_string_lossy().into_owned())
+}
+
+/// 决定「复制到文件夹」的初始目录：
+/// 上次使用过的目录若仍存在且可读取，则原样返回；否则返回空串，由前端回退到当前图片所在文件夹。
+#[tauri::command]
+fn get_copy_default_folder(last_folder: String) -> String {
+    if !last_folder.trim().is_empty() {
+        let p = PathBuf::from(&last_folder);
+        if p.is_dir() && std::fs::read_dir(&p).is_ok() {
+            return last_folder;
+        }
+    }
+    String::new()
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct IntegrationStatus {
@@ -392,6 +526,97 @@ fn set_window_theme(app: tauri::AppHandle, theme: String) -> Result<(), String> 
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_dir(tag: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("quickview-test-{}-{}", tag, nanos));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn copy_creates_file_with_same_name() {
+        let dir = temp_dir("copy1");
+        let src = dir.join("a.jpg");
+        let dest = dir.join("out");
+        fs::create_dir_all(&dest).unwrap();
+        fs::write(&src, b"hello").unwrap();
+
+        let result = copy_image_to_folder(
+            src.to_string_lossy().into_owned(),
+            dest.to_string_lossy().into_owned(),
+        )
+        .unwrap();
+
+        assert_eq!(PathBuf::from(&result), dest.join("a.jpg"));
+        assert_eq!(fs::read(dest.join("a.jpg")).unwrap(), b"hello");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn copy_avoids_duplicate_names() {
+        let dir = temp_dir("copy2");
+        let src = dir.join("pic.png");
+        let dest = dir.join("out");
+        fs::create_dir_all(&dest).unwrap();
+        fs::write(&src, b"new").unwrap();
+        fs::write(dest.join("pic.png"), b"old").unwrap();
+
+        let result = copy_image_to_folder(
+            src.to_string_lossy().into_owned(),
+            dest.to_string_lossy().into_owned(),
+        )
+        .unwrap();
+
+        assert_eq!(PathBuf::from(&result), dest.join("pic (1).png"));
+        assert_eq!(fs::read(dest.join("pic (1).png")).unwrap(), b"new");
+        assert_eq!(fs::read(dest.join("pic.png")).unwrap(), b"old");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn copy_rejects_missing_source() {
+        let dir = temp_dir("copy3");
+        let result = copy_image_to_folder(
+            dir.join("missing.jpg").to_string_lossy().into_owned(),
+            dir.to_string_lossy().into_owned(),
+        );
+        assert!(result.is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn default_folder_prefers_existing_last_folder() {
+        let dir = temp_dir("default1");
+        let last = dir.to_string_lossy().into_owned();
+        let result = get_copy_default_folder(last.clone());
+        assert_eq!(result, last);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn default_folder_returns_empty_when_invalid() {
+        let dir = temp_dir("default2");
+        let missing = dir.join("no-such-dir");
+        let result = get_copy_default_folder(missing.to_string_lossy().into_owned());
+        assert!(result.is_empty());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn default_folder_returns_empty_when_no_history() {
+        assert!(get_copy_default_folder(String::new()).is_empty());
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -436,6 +661,9 @@ pub fn run() {
             load_images,
             reveal_in_explorer,
             open_folder,
+            write_clipboard,
+            copy_image_to_folder,
+            get_copy_default_folder,
             get_integration_status,
             register_default_viewer,
             set_folder_context_menu,
