@@ -78,9 +78,12 @@ async function updateTitle() {
 }
 
 /* ---------------- 图片渲染 ---------------- */
-function renderImage(preserveView = false) {
+function renderImage(preserveView = false, onReady) {
   const img = currentImage();
-  if (!img) return;
+  if (!img) {
+    if (onReady) onReady();
+    return;
+  }
   pushHistory(img);
 
   updateCounter();
@@ -100,10 +103,12 @@ function renderImage(preserveView = false) {
       applyTransform();
     }
     preloadNeighbors();
+    if (onReady) onReady();
   };
   probe.onerror = () => {
     if (token !== state.loadToken) return;
     showToast("无法加载图片：" + img.name, true);
+    if (onReady) onReady(); // 加载失败也要放行，避免窗口一直不显示
   };
   probe.src = url;
 }
@@ -273,7 +278,7 @@ function preloadNeighbors() {
 }
 
 /* ---------------- 加载路径 ---------------- */
-async function loadPath(path) {
+async function loadPath(path, onReady) {
   try {
     const result = await invoke("load_images", { path });
     state.images = result.images;
@@ -281,12 +286,14 @@ async function loadPath(path) {
     state.single = result.single;
     if (state.images.length === 0) {
       showToast("文件夹中没有图片", true);
+      if (onReady) onReady();
       return;
     }
     state.index = result.initialIndex;
-    renderImage();
+    renderImage(false, onReady);
   } catch (e) {
     showToast(String(e), true);
+    if (onReady) onReady(); // 出错也要放行，避免窗口一直不显示
   }
 }
 
@@ -836,18 +843,49 @@ getCurrentWindow().onDragDropEvent((event) => {
   }
 });
 
-/* ---------------- 启动 ---------------- */
+/* ---------------- 启动前恢复用户设置 ---------------- */
 applyTheme(getStoredTheme()); // 默认暗色，恢复用户上次选择
 $("chkShowFullPath").checked = getShowFullPath();
 updateHistoryBadge();
 
+/* ---------------- 启动 ----------------
+ * 窗口在配置里初始隐藏（visible:false），避免先闪出白屏 / 主页。
+ * 等首帧内容准备好后再显示窗口：
+ *  - 带图片/文件夹路径启动（文件关联、右键菜单）→ 直接显示图片
+ *  - 单独打开软件 → 显示主页
+ */
+const win = getCurrentWindow();
+let windowShown = false;
+function showMainWindow() {
+  if (windowShown) return;
+  windowShown = true;
+  win.show()
+    .then(() => {
+      // 窗口首次显示后布局尺寸才最终确定，重新适配一次，避免隐藏期间算出的缩放不准
+      requestAnimationFrame(() => {
+        if (state.index >= 0 && state.scale === 1) fitToWindow();
+      });
+    })
+    .catch((e) => console.error("[启动] 显示窗口失败:", e));
+}
+
 async function bootstrap() {
+  // 兜底：即使后续任何环节异常，也保证窗口最终会显示，不会卡在隐藏状态
+  const fallback = setTimeout(showMainWindow, 3000);
   try {
     const target = await invoke("take_launch_target");
-    if (target) await loadPath(target.path);
-    else updateTitle(); // 空状态显示纯应用名
+    if (target) {
+      // 等图片真正解码并渲染完成后再显示窗口，做到“打开即是图片”
+      await loadPath(target.path, showMainWindow);
+    } else {
+      updateTitle(); // 无启动参数：显示主页（空状态默认可见）
+      showMainWindow();
+    }
   } catch (e) {
     console.error("启动失败:", e);
+    showMainWindow();
+  } finally {
+    clearTimeout(fallback);
   }
 }
 bootstrap();
